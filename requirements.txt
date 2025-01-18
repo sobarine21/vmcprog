@@ -3,4 +3,4 @@ google-generativeai
 pythreejs
 pycam
 pythonocc-core
-freecad 
+ 
