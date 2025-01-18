@@ -1,87 +1,82 @@
 import streamlit as st
-import google.generativeai as genai
-import os
-
-# Configure the Gemini API key securely from Streamlit's secrets
-genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
+import pythreejs
+import pycam
+import numpy as np
+from stl import mesh
+import io
 
 # Streamlit App UI
 st.title("CNC VMC Design Copilot")
 st.write("Use Generative AI to design CNC VMC models and generate G-code files with enhanced features.")
+st.write("This app can also visualize your 3D models and generate toolpaths using pycam.")
 
 # Part Specifications
 st.header("Part Specifications")
-shape = st.selectbox("Select Part Shape:", ["Cylinder", "Cube", "Cone", "Sphere"])
+shape = st.selectbox("Select Part Shape:", ["Cylinder", "Cube", "Cone", "Sphere", "Prism", "Custom"])
 diameter = st.number_input("Enter diameter (mm):", min_value=1, value=50)
 height = st.number_input("Enter height (mm):", min_value=1, value=100)
-length = st.number_input("Enter length (mm):", min_value=1, value=100) if shape == "Cube" else 0
+length = st.number_input("Enter length (mm):", min_value=1, value=100) if shape in ["Cube", "Prism"] else 0
+width = st.number_input("Enter width (mm):", min_value=1, value=50) if shape in ["Prism", "Cube"] else 0
 
 material = st.selectbox("Select material:", ["Aluminum", "Steel", "Titanium", "Brass", "Plastic", "Other"])
 
-# Tolerance and Finish
-tolerance = st.number_input("Enter tolerance (mm):", min_value=0.01, value=0.1)
-finish_type = st.selectbox("Select finish type:", ["Rough", "Fine", "Ultra-Fine"])
-
 # Tooling Information
-st.header("Tooling Information")
-tool_type = st.selectbox("Select tool type:", ["End Mill", "Ball End Mill", "Face Mill", "Drill", "Tap"])
+tool_type = st.selectbox("Select tool type:", ["End Mill", "Ball End Mill", "Face Mill", "Drill", "Tap", "Reamer", "Slot Cutter"])
 tool_diameter = st.number_input("Enter tool diameter (mm):", min_value=1, value=10)
-tool_length = st.number_input("Enter tool length (mm):", min_value=1, value=50)
 cutting_speed = st.number_input("Enter cutting speed (mm/min):", min_value=1, value=150)
 feed_rate = st.number_input("Enter feed rate (mm/min):", min_value=1, value=100)
 depth_of_cut = st.number_input("Enter depth of cut (mm):", min_value=0.1, value=5.0)
 
-# Advanced Machining Options
-workpiece_orientation = st.selectbox("Select workpiece orientation:", ["Flat", "Vertical", "Tilted"])
-coolant_option = st.radio("Use coolant?", ("Yes", "No"))
-spindle_speed = st.number_input("Enter spindle speed (RPM):", min_value=500, value=1500)
-chip_load = st.number_input("Enter chip load (mm/tooth):", min_value=0.01, value=0.1)
+# Upload 3D Model (STL)
+st.header("Upload and Visualize 3D Model")
+uploaded_file = st.file_uploader("Upload 3D model (STL)", type=["stl"])
 
-# Operations and Sequence
-st.header("Operations Sequence")
-operations = st.multiselect("Select operations:", ["Roughing", "Drilling", "Finishing", "Tapping"])
-operation_sequence = st.text_input("Define operation sequence (comma-separated, e.g., Roughing, Drilling):")
+if uploaded_file is not None:
+    # Read the uploaded STL file and display it using pythreejs
+    st.write("3D Model Visualization")
+    
+    # Load the STL model using pycam or other libraries
+    stl_mesh = mesh.Mesh(io.BytesIO(uploaded_file.read()))
+    
+    # Convert the model into 3D mesh for visualization using pythreejs
+    geometry = pythreejs.BufferGeometry(attributes={
+        'position': pythreejs.BufferAttribute(np.array(stl_mesh.vectors).reshape(-1, 3).astype(np.float32), 3)
+    })
+    
+    material = pythreejs.MeshLambertMaterial(color='blue')
+    mesh = pythreejs.Mesh(geometry=geometry, material=material)
+    
+    scene = pythreejs.Scene(children=[mesh, pythreejs.AmbientLight(intensity=0.5)])
+    camera = pythreejs.PerspectiveCamera(position=[3, 3, 3], lookAt=[0, 0, 0])
+    
+    renderer = pythreejs.WebGLRenderer(camera=camera, scene=scene, width=600, height=400)
+    
+    # Display the 3D model in Streamlit
+    st.write(renderer)
 
-# Button to generate model and G-code
-if st.button("Generate Design and G-code"):
-    try:
-        # Step 1: Generate CNC Model using Gemini API
-        prompt = f"Create a 3D {shape} CNC VMC model with diameter {diameter}mm, height {height}mm, material {material}, using tool {tool_type}, with cutting speed {cutting_speed}mm/min, feed rate {feed_rate}mm/min, depth of cut {depth_of_cut}mm. Apply {finish_type} finish."
-        
-        # Interact with Gemini API for design generation
-        model = genai.GenerativeModel('gemini-1.5-flash')
-        response = model.generate_content(prompt)
+# Toolpath Generation and G-code Creation using Pycam
+st.header("Generate Toolpath and G-code")
 
-        # Step 2: Simulate toolpath generation (mocked for demonstration)
-        toolpath = f"Generating toolpath for {material} part with tool {tool_type}."
-        
-        # Step 3: Generate G-code (simplified)
-        gcode = f"""
-        G21 ; Set units to mm
-        G17 ; Select XY plane
-        G90 ; Absolute positioning
-        ; Toolpath for {material} part with {tool_type}
-        {toolpath}
-        M30 ; End of program
-        """
-        
-        # Step 4: Handle file generation for CAD (mocked content)
-        gcode_filename = f"part_{diameter}x{height}_gcode.gcode"
-        with open(gcode_filename, 'w') as file:
-            file.write(gcode)
+if uploaded_file is not None:
+    # Generate toolpath using pycam (simulating roughing operation)
+    st.write("Generating Toolpath...")
+    
+    # Save the uploaded STL file to disk
+    with open("uploaded_model.stl", "wb") as f:
+        f.write(uploaded_file.getbuffer())
+    
+    # Example of using pycam to load model and generate a toolpath
+    part = pycam.load_model("uploaded_model.stl")
+    
+    # Generate toolpath (for simplicity, using roughing operation here)
+    toolpath = part.generate_toolpath(operation="roughing", tool_diameter=tool_diameter, cutting_speed=cutting_speed, feed_rate=feed_rate, depth_of_cut=depth_of_cut)
+    
+    # Convert the toolpath into G-code
+    gcode = toolpath.to_gcode()
+    
+    # Display the G-code and provide download option
+    st.text_area("Generated G-code", gcode)
+    st.download_button("Download G-code", data=gcode, file_name="generated_toolpath.gcode")
 
-        cad_filename = f"part_{diameter}x{height}_model.step"
-        with open(cad_filename, 'w') as file:
-            file.write(f"CAD file for {material} part with diameter {diameter}mm and height {height}mm.")
-
-        # Step 5: Provide download links
-        st.write("Design Generation and Toolpath Complete!")
-        st.download_button(label="Download G-code", data=open(gcode_filename, "rb").read(), file_name=gcode_filename, mime="application/gcode")
-        st.download_button(label="Download CAD Model (STEP format)", data=open(cad_filename, "rb").read(), file_name=cad_filename, mime="application/step")
-
-        # Additional options can include estimating cutting force, tool life, etc. (mocked here)
-        st.write("Estimated Cutting Force: 200N")
-        st.write(f"Tool Life Estimation: 50 hours based on parameters.")
-
-    except Exception as e:
-        st.error(f"Error: {e}")
+# Display Success Message
+st.write("CNC Design and Toolpath Generation Complete!")
