@@ -7,6 +7,30 @@ import math
 # Configure the Gemini API key securely from Streamlit's secrets
 genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
 
+# Function to estimate cutting force (simplified model based on cutting speed, tool diameter, and material)
+def calculate_cutting_force(diameter, cutting_speed, feed_rate, material):
+    material_properties = {
+        "Aluminum": 100,  # N/mm^2
+        "Steel": 200,
+        "Titanium": 300,
+        "Brass": 150,
+        "Plastic": 50,
+        "Other": 120
+    }
+    
+    material_strength = material_properties.get(material, 120)  # Default to "Other" if not found
+    force = (cutting_speed * feed_rate * diameter) / 1000  # Simplified formula for estimation
+    
+    # Adjust based on material strength
+    force *= material_strength / 100
+    return force
+
+# Function to estimate tool life based on cutting force and tool diameter
+def estimate_tool_life(cutting_force, tool_diameter):
+    # A simplified formula for tool life estimation
+    tool_life = (tool_diameter ** 2) / (cutting_force * 0.1)
+    return tool_life
+
 # Streamlit App UI
 st.title("CNC VMC Design Copilot")
 st.write("Use Generative AI to design CNC VMC models and generate G-code files with enhanced features.")
@@ -91,29 +115,3 @@ if st.button("Generate Design and G-code"):
 
     except Exception as e:
         st.error(f"Error: {e}")
-
-
-# Function to estimate cutting force (simplified model based on cutting speed, tool diameter, and material)
-def calculate_cutting_force(diameter, cutting_speed, feed_rate, material):
-    material_properties = {
-        "Aluminum": 100,  # N/mm^2
-        "Steel": 200,
-        "Titanium": 300,
-        "Brass": 150,
-        "Plastic": 50,
-        "Other": 120
-    }
-    
-    material_strength = material_properties.get(material, 120)  # Default to "Other" if not found
-    force = (cutting_speed * feed_rate * diameter) / 1000  # Simplified formula for estimation
-    
-    # Adjust based on material strength
-    force *= material_strength / 100
-    return force
-
-
-# Function to estimate tool life based on cutting force and tool diameter
-def estimate_tool_life(cutting_force, tool_diameter):
-    # A simplified formula for tool life estimation
-    tool_life = (tool_diameter ** 2) / (cutting_force * 0.1)
-    return tool_life
